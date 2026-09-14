@@ -50,8 +50,9 @@ mock adapters are real code with a documented one-line switch to go live *if* a 
 connected; until then, the mock **is** the product.
 
 **Deployment is out of scope** (user decision 2026-08-15). The Aura keep-alive is done and
-independent of deployment (`.github/workflows/uptime.yml`, daily 03:17 UTC; GitHub disables
-scheduled workflows after 60 days of repo inactivity). That workflow also carries the
+independent of deployment: it runs from the `uptime.yml` workflow in the original `kairos`
+repository (daily 03:17 UTC) and is deliberately not included here, so this repository never runs a
+second keep-alive against the same Aura instance. That workflow also carries the
 **idle-connection recovery probe** (added 2026-08-23): it queries Aura, idles 11 minutes past
 `max_connection_lifetime`, then reuses **the same pool** — the direct regression test for the
 `SessionExpired` bug, which `run_soak_test.py --idle` otherwise only catches in a 70-minute run
@@ -1076,7 +1077,7 @@ recorded above.
 | **What the benchmark writes** | `run_benchmark.py` + `verify_layers.py` write **only `audit_log` rows** (one per synthesis, ~37 per full sweep) — append-only, no golden data touched, no schema change. `run_compliance_eval.py` and `run_load_test.py` are read-only; `run_model_validation.py` writes one `model_gate_result` row (`--no-persist` to skip). Safe to run against cloud; it does spend NIM/Jina quota. |
 | **Benchmark checkpoints must live on a mounted path** | `run_benchmark.py --checkpoint` writes each graded question as it lands so a crash costs the remainder, not the run — but `/tmp` is **container-local**, and a rebuild mid-run wipes it. Use `/app/.benchmark_runs/` (bind-mounted to `backend/.benchmark_runs/` by `docker-compose.override.yml`). Launch detached with `docker exec -d` and write logs there too. |
 | Seed cloud (run once) | `make init-all` (schema + Qdrant collections **+ payload indexes**) → `make seed` (regulations + users) → `make load-dataset`. Idempotent. Doc pipelines are async — re-run `scripts/seed_validation_corpus.py` ~30 s after load (validation_corpus needs ES content indexed first). |
-| Neo4j Aura keep-alive | Aura Free pauses after 3 days idle. **Handled by `.github/workflows/uptime.yml`** (daily 03:17 UTC) — it queries Aura *directly* with the driver, so it works whether or not a backend is deployed. Needs repo secrets `NEO4J_URI`/`NEO4J_USERNAME`/`NEO4J_PASSWORD`/`NEO4J_DATABASE`. GitHub disables scheduled workflows after 60 days of repo inactivity. |
+| Neo4j Aura keep-alive | Aura Free pauses after 3 days idle. **Handled by `.github/workflows/uptime.yml` in the original `kairos` repository — not included in this one** (daily 03:17 UTC) — it queries Aura *directly* with the driver, so it works whether or not a backend is deployed. Needs repo secrets `NEO4J_URI`/`NEO4J_USERNAME`/`NEO4J_PASSWORD`/`NEO4J_DATABASE`. GitHub disables scheduled workflows after 60 days of repo inactivity. |
 | Neo4j driver pool settings are load-bearing | `dependencies.py` sets `liveness_check_timeout=30` + `max_connection_lifetime=300`. Aura closes **idle connections** within minutes, and without these a stale pooled connection throws `SessionExpired` → intermittent 500s on every Neo4j endpoint. Don't drop them; the daily keep-alive cron does **not** cover this. **Regression-tested 2026-08-22:** after a 10-minute idle window the four Neo4j-backed endpoints (`/compliance/dashboard`, `/assets/{id}/knowledge`, graph, blast-radius) all recovered with no `SessionExpired` — `run_soak_test.py` phase 3, and the reason that phase runs against **cloud** stores rather than local ones. |
 
 ### Feature-specific — endpoints, roles & pages
